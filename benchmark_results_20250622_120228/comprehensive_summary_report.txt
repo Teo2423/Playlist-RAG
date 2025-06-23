@@ -1,0 +1,118 @@
+🎵 COMPREHENSIVE PLAYLIST BENCHMARK REPORT
+🧠 Audio + Semantic Metrics Analysis
+============================================================
+
+📅 Date: 2025-06-22 18:04:41
+📊 Total prompts tested: 200
+🎯 Target songs per playlist: 10
+🎼 Embedding types tested: 5
+🧠 Semantic metrics: ✅ Included
+
+📈 SUCCESS RATES BY EMBEDDING TYPE:
+----------------------------------------
+chunks          100.0% (200/200)
+simple_avg      100.0% (200/200)
+weighted_avg    100.0% (200/200)
+representative  100.0% (200/200)
+full_songs      100.0% (200/200)
+
+🏆 AUDIO METRICS RANKINGS (lower = better, except ILS):
+------------------------------------------------------------
+
+ILS:
+  1. simple_avg      0.7598
+  2. weighted_avg    0.7534
+  3. representative  0.6937
+  4. full_songs      0.6789
+  5. chunks          0.5514
+
+KEY COMPACTNESS:
+  1. chunks          2.9067
+  2. simple_avg      2.9626
+  3. representative  2.9656
+  4. weighted_avg    2.9708
+  5. full_songs      2.9773
+
+BMP DISPERSION:
+  1. weighted_avg    0.2042
+  2. chunks          0.2044
+  3. simple_avg      0.2050
+  4. full_songs      0.2057
+  5. representative  0.2115
+
+SPECTRAL CENTROID DRIFT:
+  1. simple_avg      384.7452
+  2. weighted_avg    387.4681
+  3. representative  390.7119
+  4. chunks          394.0473
+  5. full_songs      420.8726
+
+🧠 SEMANTIC METRICS RANKINGS (higher = better):
+------------------------------------------------------------
+
+PROMPT COVERAGE:
+  1. simple_avg      0.3540
+  2. weighted_avg    0.3515
+  3. representative  0.3415
+  4. full_songs      0.3320
+  5. chunks          0.3215
+
+ARTIST DIVERSITY:
+  1. chunks          0.8855
+  2. full_songs      0.8847
+  3. representative  0.8796
+  4. weighted_avg    0.8702
+  5. simple_avg      0.8676
+
+ALBUM DIVERSITY:
+  1. chunks          0.8959
+  2. full_songs      0.8956
+  3. representative  0.8952
+  4. weighted_avg    0.8945
+  5. simple_avg      0.8931
+
+GENRE ENTROPY:
+  1. chunks          3.6866
+  2. representative  3.6402
+  3. full_songs      3.6076
+  4. weighted_avg    3.5396
+  5. simple_avg      3.5331
+
+MOOD ENTROPY:
+  1. representative  2.9722
+  2. weighted_avg    2.9551
+  3. full_songs      2.9415
+  4. simple_avg      2.9086
+  5. chunks          2.7514
+
+INSTRUMENT ENTROPY:
+  1. representative  3.2498
+  2. chunks          3.2391
+  3. simple_avg      3.1924
+  4. full_songs      3.1709
+  5. weighted_avg    3.1399
+
+GLOBAL SEMANTIC ENTROPY:
+  1. representative  4.9061
+  2. chunks          4.8661
+  3. full_songs      4.8527
+  4. weighted_avg    4.8358
+  5. simple_avg      4.8342
+
+🎼 EMBEDDING TYPES EXPLANATION:
+-----------------------------------
+• chunks:         Best matching chunks from songs
+• simple_avg:     Average of all song chunks
+• weighted_avg:   Weighted average of song chunks
+• representative: Most representative chunk per song
+• full_songs:     Complete song embeddings (no chunking)
+
+🧠 SEMANTIC METRICS EXPLANATION:
+-----------------------------------
+• prompt_coverage:    How well playlist matches prompt
+• artist_diversity:   Variety of artists in playlist
+• album_diversity:    Variety of albums in playlist
+• genre_entropy:      Musical genre diversity
+• mood_entropy:       Emotional/mood diversity
+• instrument_entropy: Instrumental diversity
+• global_entropy:     Overall semantic diversity
