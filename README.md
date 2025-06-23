@@ -34,7 +34,7 @@ RagMusical/
 ## 📊 Dataset
 
 Este proyecto utiliza el **dataset de validación de Jamendo** de Hugging Face:
-- **Fuente**: [Jamendo Dataset]([https://huggingface.co/datasets/jretzer/jamendo_dataset](MTG-JAMENDO))
+- **Fuente**: [Jamendo Dataset](https://huggingface.co/datasets/rkstgr/mtg-jamendo/tree/main/data/val))
 - **Split usado**: `validation` (~5671 canciones)
 - **Formato**: Archivos `.opus` con metadatos en `valid.tsv`
 
