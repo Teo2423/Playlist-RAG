@@ -58,18 +58,7 @@ Songs/
 
 ## 🚀 Instalación y Configuración
 
-### 1. Requisitos del Sistema
-```bash
-# Instalar dependencias de audio (Ubuntu/Debian)
-sudo apt-get install ffmpeg libsndfile1
-
-# Para otros sistemas, consultar documentación de librosa
-```
-
-### 2. Dependencias de Python
-```bash
-pip install -r requirements.txt
-```
+### Dependencias de Python
 
 **Dependencias principales:**
 - `torch` - Deep learning
@@ -80,7 +69,7 @@ pip install -r requirements.txt
 - `openai` - API para generación de prompts
 - `tqdm` - Barras de progreso
 
-### 3. Variables de Entorno
+### Variables de Entorno
 Crear archivo `.env`:
 ```bash
 OPENAI_API_KEY=tu_api_key_aqui
