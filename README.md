@@ -6,7 +6,7 @@ Un sistema de recomendación musical basado en **Retrieval-Augmented Generation 
 
 Este proyecto fue desarrollado en el marco de la materia **"Procesamiento de Señales, Audio y Habla"** de la **Universidad de Buenos Aires (UBA)**, bajo la supervisión del **Profesor Pablo Riera**.
 
-> 🤖 **Nota**: Este proyecto fue desarrollado con la asistencia de **Claude-4-Sonnet** de Anthropic.
+> 🤖 **Nota**: El codigo de este proyecto fue desarrollado con la asistencia de **Claude-4-Sonnet** de Anthropic.
 
 ## 🎯 ¿Qué hace este proyecto?
 
