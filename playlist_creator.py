@@ -23,7 +23,8 @@ def sanitize_filename(filename):
 
 def choose_database_type():
     """
-    Permite al usuario elegir entre las 4 colecciones de embeddings disponibles.
+    Permite al usuario elegir entre las 5 colecciones de embeddings disponibles.
+    ACTUALIZADO: Incluye full_songs
     """
     print("\n🎵 SELECCIÓN DE TIPO DE BÚSQUEDA")
     print("=" * 60)
@@ -54,8 +55,14 @@ def choose_database_type():
     print("   - Ideal para encontrar canciones con características similares")
     print()
     
+    print("5. 🎼 Embeddings de canción completa (Full Songs)")
+    print("   - Embedding de toda la canción sin dividir en chunks")
+    print("   - Captura la estructura musical completa")
+    print("   - Ideal para coherencia estructural y musical")
+    print()
+    
     while True:
-        choice = input("Elige una opción (1, 2, 3 o 4): ").strip()
+        choice = input("Elige una opción (1, 2, 3, 4 o 5): ").strip()
         if choice == "1":
             return "chunks", "music_chunks_embeddings"
         elif choice == "2":
@@ -64,19 +71,21 @@ def choose_database_type():
             return "weighted", "music_weighted_embeddings"
         elif choice == "4":
             return "representative", "music_representative_embeddings"
+        elif choice == "5":
+            return "full_songs", "music_full_songs_embeddings"
         else:
-            print("❌ Opción inválida. Por favor elige 1, 2, 3 o 4.")
+            print("❌ Opción inválida. Por favor elige 1, 2, 3, 4 o 5.")
 
 def create_text_based_playlist():
     """
     Crea una playlist basada en una descripción de texto usando embeddings de CLAP.
-    Permite elegir entre las 4 colecciones de embeddings disponibles.
+    ACTUALIZADO: Soporta las 5 colecciones de embeddings.
     """
     
     qdrant_storage_path = "./qdrant_storage"
     target_sample_rate = 48000  # Para el modelo CLAP
-    original_sample_rate = 48000  # ✅ CAMBIO: Usar 48kHz (mismo que CLAP y canciones originales)
-    target_unique_songs = 10  # Número de CANCIONES ÚNICAS para la playlist
+    original_sample_rate = 48000  # Usar 48kHz (nativo CLAP)
+    target_unique_songs = 10  # Número de canciones únicas para la playlist
     
     # Verificar que existe la base de datos
     if not os.path.exists(qdrant_storage_path):
@@ -93,7 +102,7 @@ def create_text_based_playlist():
         print("❌ Error: Debes proporcionar una descripción.")
         return
     
-    # Elegir tipo de base de datos (ahora con 4 opciones)
+    # Elegir tipo de base de datos (ahora con 5 opciones)
     search_type, collection_name = choose_database_type()
     
     print(f"\n🔍 Buscando en {search_type} para: '{description}'")
@@ -105,8 +114,12 @@ def create_text_based_playlist():
     try:
         client = QdrantClient(path=qdrant_storage_path)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = ClapModel.from_pretrained("laion/larger_clap_music").to(device)
-        processor = ClapProcessor.from_pretrained("laion/larger_clap_music")
+        
+        # CORREGIDO: Usar el mismo modelo que en benchmark e indexer
+        model = ClapModel.from_pretrained("laion/larger_clap_general").to(device)
+        processor = ClapProcessor.from_pretrained("laion/larger_clap_general")
+        
+        print(f"   ✅ Modelo cargado en: {device}")
     except Exception as e:
         print(f"❌ Error cargando modelo o base de datos: {str(e)}")
         return
@@ -130,7 +143,7 @@ def create_text_based_playlist():
     print(f"🔍 Buscando {search_type} similares...")
     try:
         if search_type == "chunks":
-            # Para chunks, necesitamos buscar más resultados para garantizar 10 canciones únicas
+            # Para chunks, necesitamos buscar más resultados para garantizar canciones únicas
             processed_results = search_unique_songs_from_chunks(
                 client, collection_name, query_embedding, target_unique_songs
             )
@@ -149,6 +162,8 @@ def create_text_based_playlist():
                 processed_results = process_weighted_results(search_results)
             elif search_type == "representative":
                 processed_results = process_representative_results(search_results)
+            elif search_type == "full_songs":
+                processed_results = process_full_songs_results(search_results)
             else:
                 print(f"❌ Tipo de búsqueda desconocido: {search_type}")
                 return
@@ -169,7 +184,8 @@ def create_text_based_playlist():
         "chunks": "chunks",
         "songs": "simple_avg", 
         "weighted": "weighted_avg",
-        "representative": "representative"
+        "representative": "representative",
+        "full_songs": "full_songs"
     }
     search_type_label = search_type_labels.get(search_type, search_type)
     playlist_name = f"playlist_{search_type_label}_{sanitize_filename(description)}_{timestamp}"
@@ -208,57 +224,62 @@ def create_text_based_playlist():
         
         # Nomenclatura específica según el tipo
         if search_type == "chunks":
-            destination_filename = f"{i:02d}_{base_name}_full_foundby_chunk{result_info['chunk_index']:02d}{extension}"
+            chunk_idx = result_info.get('chunk_index', 0)
+            destination_filename = f"{i:02d}_{base_name}_full_foundby_chunk{chunk_idx:02d}{extension}"
         elif search_type == "songs":
             destination_filename = f"{i:02d}_{base_name}_simple_avg{extension}"
         elif search_type == "weighted":
             destination_filename = f"{i:02d}_{base_name}_weighted_avg{extension}"
         elif search_type == "representative":
-            destination_filename = f"{i:02d}_{base_name}_repr_chunk{result_info['chunk_index']:02d}{extension}"
+            chunk_idx = result_info.get('chunk_index', 0)
+            destination_filename = f"{i:02d}_{base_name}_repr_chunk{chunk_idx:02d}{extension}"
+        elif search_type == "full_songs":
+            destination_filename = f"{i:02d}_{base_name}_full_song{extension}"
         else:
             destination_filename = f"{i:02d}_{base_name}_full{extension}"
             
         destination_path = os.path.join(playlist_folder, destination_filename)
         
         # Procesar archivo de audio (siempre guarda la canción completa)
-        try:
-            success = process_audio_file(result_info, destination_path, search_type, original_sample_rate)
+        if process_audio_file(result_info, destination_path, search_type, original_sample_rate):
+            copied_count += 1
             
-            if success:
-                copied_count += 1
-                result_info['playlist_filename'] = destination_filename
-                result_info['final_sample_rate'] = original_sample_rate
-                playlist_info.append(result_info)
-            else:
-                failed_count += 1
-                
-        except Exception as e:
-            print(f"    ❌ Error procesando archivo: {str(e)}")
+            # Información para el archivo de playlist
+            playlist_info.append({
+                'filename': result_info['filename'],
+                'playlist_filename': destination_filename,
+                'display_name': result_info['display_name'],
+                'track_id': result_info['track_id'],
+                'similarity': result_info['similarity'],
+                'file_path': result_info['file_path'],
+                'converted_duration': result_info.get('converted_duration', 0),
+                'final_sample_rate': original_sample_rate,
+                'embedding_type': result_info['embedding_type'],
+                'chunk_info': result_info['chunk_info']
+            })
+        else:
             failed_count += 1
         
         print("-" * 100)
     
-    # Crear archivos de información
+    # Crear archivos informativos de la playlist
     create_playlist_info_file(playlist_folder, description, playlist_info, search_type)
     create_m3u_playlist(playlist_folder, playlist_name, playlist_info)
     
-    # Resumen final
+    # Mostrar resumen final
     print_final_summary(playlist_folder, copied_count, failed_count, description, 
                        original_sample_rate, playlist_info, search_type)
 
 def search_unique_songs_from_chunks(client, collection_name, query_embedding, target_unique_songs):
     """
-    Busca en la base de datos de chunks hasta obtener el número objetivo de canciones únicas.
+    Busca canciones únicas a partir de chunks para evitar duplicados.
     """
-    unique_songs = {}  # track_id -> mejor resultado para esa canción
-    search_limit = 20  # Empezar buscando 20 chunks
-    max_search_limit = 200  # Límite máximo para evitar búsquedas infinitas
-    last_search_results = []  # Para guardar los últimos resultados para el mensaje final
-    
-    print(f"🔍 Buscando chunks para obtener {target_unique_songs} canciones únicas...")
+    unique_songs = {}
+    search_limit = 20
+    max_search_limit = 200
     
     while len(unique_songs) < target_unique_songs and search_limit <= max_search_limit:
-        print(f"   Buscando {search_limit} chunks (canciones únicas encontradas: {len(unique_songs)})")
+        print(f"    📊 Buscando {search_limit} chunks para encontrar {target_unique_songs} canciones únicas...")
         
         search_results = client.search(
             collection_name=collection_name,
@@ -266,9 +287,6 @@ def search_unique_songs_from_chunks(client, collection_name, query_embedding, ta
             limit=search_limit
         )
         
-        last_search_results = search_results  # Guardar para el mensaje final
-        
-        # Procesar resultados y mantener solo el mejor chunk por canción
         for result in search_results:
             payload = result.payload
             track_id = payload.get('track_id')
@@ -276,133 +294,106 @@ def search_unique_songs_from_chunks(client, collection_name, query_embedding, ta
             if track_id is None:
                 continue
                 
-            # Si es la primera vez que vemos esta canción, o si este chunk tiene mejor score
-            if (track_id not in unique_songs or 
-                result.score > unique_songs[track_id]['similarity']):
-                
-                chunk_info = f"{payload['chunk_index'] + 1}/{payload['total_chunks']} ({payload['start_time']:.1f}s-{payload['end_time']:.1f}s)"
-                duration_info = f"{payload['chunk_duration']:.1f}s (total: {payload['total_duration']:.1f}s)"
-                
+            # Solo mantener la mejor similitud por canción
+            if track_id not in unique_songs or result.score > unique_songs[track_id]['similarity']:
                 unique_songs[track_id] = {
-                    'display_name': f"{payload['filename']} - Chunk {payload['chunk_index'] + 1}",
                     'filename': payload['filename'],
+                    'display_name': Path(payload['filename']).stem,
                     'track_id': track_id,
                     'similarity': result.score,
                     'file_path': payload['file_path'],
-                    'duration_info': duration_info,
-                    'chunk_info': chunk_info,
                     'chunk_index': payload['chunk_index'],
                     'start_time': payload['start_time'],
                     'end_time': payload['end_time'],
-                    'chunk_duration': payload['chunk_duration'],
                     'total_duration': payload['total_duration'],
+                    'duration_info': f"{payload['total_duration']:.1f}s (chunk {payload['chunk_index']+1}: {payload['start_time']:.1f}s-{payload['end_time']:.1f}s)",
+                    'chunk_info': f"Mejor chunk: {payload['chunk_index']+1} ({payload['start_time']:.1f}s-{payload['end_time']:.1f}s)",
                     'embedding_type': 'chunk'
                 }
         
-        # Si no hemos alcanzado el objetivo, buscar más chunks
+        print(f"    ✅ Encontradas {len(unique_songs)} canciones únicas hasta ahora")
+        
         if len(unique_songs) < target_unique_songs:
             search_limit += 30
         else:
             break
     
-    # Convertir a lista ordenada por similitud
+    # Convertir a lista y ordenar por similitud
     sorted_results = sorted(unique_songs.values(), key=lambda x: x['similarity'], reverse=True)
-    
-    # Tomar solo el número objetivo
-    final_results = sorted_results[:target_unique_songs]
-    
-    print(f"✅ Encontradas {len(final_results)} canciones únicas de {len(last_search_results)} chunks analizados")
-    
-    return final_results
+    return sorted_results[:target_unique_songs]
 
 def process_song_results(search_results):
-    """
-    Procesa resultados de búsqueda en canciones completas.
-    """
+    """Procesa resultados de la colección de promedio simple de canciones."""
     processed_results = []
     
     for result in search_results:
         payload = result.payload
+        filename = payload['filename']
         track_id = payload.get('track_id', 'N/A')
+        total_chunks = payload['total_chunks']
+        total_duration = payload['total_duration']
         
         processed_result = {
-            'display_name': f"{payload['filename']} (Canción completa)",
-            'filename': payload['filename'],
+            'filename': filename,
+            'display_name': Path(filename).stem,
             'track_id': track_id,
             'similarity': result.score,
             'file_path': payload['file_path'],
-            'duration_info': f"{payload['total_duration']:.1f}s ({payload['total_chunks']} chunks)",
-            'chunk_info': f"Embedding promedio de {payload['total_chunks']} chunks",
-            'chunk_index': None,
-            'start_time': 0,
-            'end_time': payload['total_duration'],
-            'chunk_duration': payload['total_duration'],
-            'total_duration': payload['total_duration'],
+            'duration_info': f"{total_duration:.1f}s ({total_chunks} chunks)",
+            'chunk_info': f"Promedio simple de {total_chunks} chunks",
+            'total_duration': total_duration,
             'embedding_type': 'song_average'
         }
-        
         processed_results.append(processed_result)
     
     return processed_results
 
 def process_weighted_results(search_results):
-    """
-    Procesa resultados de búsqueda en embeddings ponderados por energía.
-    """
+    """Procesa resultados de la colección de promedio ponderado."""
     processed_results = []
     
     for result in search_results:
         payload = result.payload
+        filename = payload['filename']
         track_id = payload.get('track_id', 'N/A')
-        
-        # Información específica del pooling ponderado
-        method_info = "Promedio ponderado por energía"
-        if payload.get('method') == 'uniform_weights':
-            method_info = "Promedio ponderado (pesos uniformes)"
-        
-        max_energy_chunk = payload.get('max_energy_chunk', 0)
-        energy_variance = payload.get('energy_variance', 0.0)
+        total_chunks = payload['total_chunks']
+        total_duration = payload['total_duration']
+        most_energetic_chunk = payload['most_energetic_chunk_index']
         
         processed_result = {
-            'display_name': f"{payload['filename']} (Promedio ponderado)",
-            'filename': payload['filename'],
+            'filename': filename,
+            'display_name': Path(filename).stem,
             'track_id': track_id,
             'similarity': result.score,
             'file_path': payload['file_path'],
-            'duration_info': f"{payload['total_duration']:.1f}s ({payload['total_chunks']} chunks)",
-            'chunk_info': f"{method_info} - Chunk más energético: {max_energy_chunk} - Varianza: {energy_variance:.6f}",
-            'chunk_index': max_energy_chunk,  # Para compatibilidad
-            'start_time': 0,
-            'end_time': payload['total_duration'],
-            'chunk_duration': payload['total_duration'],
-            'total_duration': payload['total_duration'],
+            'duration_info': f"{total_duration:.1f}s ({total_chunks} chunks)",
+            'chunk_info': f"Promedio ponderado por energía (chunk más energético: {most_energetic_chunk})",
+            'chunk_index': most_energetic_chunk,
+            'total_duration': total_duration,
             'embedding_type': 'weighted_pooling'
         }
-        
         processed_results.append(processed_result)
     
     return processed_results
 
 def process_representative_results(search_results):
-    """
-    Procesa resultados de búsqueda en embeddings de chunk representativo.
-    """
+    """Procesa resultados de la colección de chunks representativos."""
     processed_results = []
     
     for result in search_results:
         payload = result.payload
+        filename = payload['filename']
         track_id = payload.get('track_id', 'N/A')
-        
-        # Información específica del chunk representativo
-        rep_chunk_idx = payload.get('representative_chunk_index', 0)
-        distance_to_centroid = payload.get('distance_to_centroid', 0.0)
-        rep_start_time = payload.get('representative_start_time', 0.0)
-        rep_end_time = payload.get('representative_end_time', 30.0)
-        centroid_method = payload.get('centroid_method', 'unknown')
+        rep_chunk_idx = payload['representative_chunk_index']
+        rep_start_time = payload['representative_start_time']
+        rep_end_time = payload['representative_end_time']
+        distance_to_centroid = payload['distance_to_centroid']
+        centroid_method = payload['centroid_method']
+        total_duration = payload['total_duration']
         
         processed_result = {
-            'display_name': f"{payload['filename']} (Chunk representativo)",
-            'filename': payload['filename'],
+            'filename': filename,
+            'display_name': Path(filename).stem,
             'track_id': track_id,
             'similarity': result.score,
             'file_path': payload['file_path'],
@@ -415,7 +406,34 @@ def process_representative_results(search_results):
             'total_duration': payload['total_duration'],
             'embedding_type': 'representative_chunk'
         }
+        processed_results.append(processed_result)
+    
+    return processed_results
+
+def process_full_songs_results(search_results):
+    """
+    Procesa resultados de la colección de full_songs.
+    NUEVA FUNCIÓN para soportar embeddings de canciones completas.
+    """
+    processed_results = []
+    
+    for result in search_results:
+        payload = result.payload
+        filename = payload['filename']
+        track_id = payload.get('track_id', 'N/A')
+        total_duration = payload['total_duration']
         
+        processed_result = {
+            'filename': filename,
+            'display_name': Path(filename).stem,
+            'track_id': track_id,
+            'similarity': result.score,
+            'file_path': payload['file_path'],
+            'duration_info': f"{total_duration:.1f}s (canción completa)",
+            'chunk_info': "Embedding de canción completa (sin chunks)",
+            'total_duration': total_duration,
+            'embedding_type': 'full_song'
+        }
         processed_results.append(processed_result)
     
     return processed_results
@@ -423,22 +441,23 @@ def process_representative_results(search_results):
 def process_audio_file(result_info, destination_path, search_type, original_sample_rate):
     """
     Procesa un archivo de audio según el tipo de búsqueda.
-    Siempre guarda la canción COMPLETA, independientemente del tipo de embedding usado.
+    ACTUALIZADO: Incluye soporte para full_songs.
     """
     try:
         # Mensajes específicos según el tipo
         type_messages = {
-            "chunks": f"encontrada por chunk {result_info['chunk_index'] + 1}",
-            "songs": "promedio simple de todos los chunks",
-            "weighted": f"promedio ponderado (chunk más energético: {result_info['chunk_index']})",
-            "representative": f"chunk representativo {result_info['chunk_index']} ({result_info['start_time']:.1f}s-{result_info['end_time']:.1f}s)"
+            "chunks": f"encontrada por chunk {result_info.get('chunk_index', 0) + 1}",
+            "songs": "promedio simple de todos los chunks", 
+            "weighted": f"promedio ponderado (chunk más energético: {result_info.get('chunk_index', 0)})",
+            "representative": f"chunk representativo {result_info.get('chunk_index', 0)} ({result_info.get('start_time', 0):.1f}s-{result_info.get('end_time', 30):.1f}s)",
+            "full_songs": "embedding de canción completa"
         }
         
         message = type_messages.get(search_type, "embedding avanzado")
         print(f"    🔄 Procesando: {result_info['filename']} ({message})")
         print(f"    🎵 Guardando canción COMPLETA en playlist")
         
-        # Cargar audio original COMPLETO (siempre la canción entera)
+        # Cargar audio original COMPLETO
         print(f"    📥 Cargando audio completo...")
         audio_data, current_sr = librosa.load(result_info['file_path'], sr=None, mono=True)
         
@@ -474,7 +493,7 @@ def process_audio_file(result_info, destination_path, search_type, original_samp
 def create_playlist_info_file(playlist_folder, description, playlist_info, search_type):
     """
     Crea un archivo de texto con información detallada de la playlist.
-    Actualizado para incluir los 4 tipos de embedding.
+    ACTUALIZADO: Incluye los 5 tipos de embedding.
     """
     info_file_path = os.path.join(playlist_folder, "playlist_info.txt")
     
@@ -483,7 +502,8 @@ def create_playlist_info_file(playlist_folder, description, playlist_info, searc
         "chunks": "Chunks de 30s (canciones completas guardadas)",
         "songs": "Promedio simple por canción",
         "weighted": "Promedio ponderado por energía de audio", 
-        "representative": "Chunk más representativo por canción"
+        "representative": "Chunk más representativo por canción",
+        "full_songs": "Canción completa sin chunks"
     }
     
     try:
@@ -503,6 +523,8 @@ def create_playlist_info_file(playlist_folder, description, playlist_info, searc
                 f.write(f"⚖️  Nota: Búsqueda basada en promedio ponderado por energía de audio\n\n")
             elif search_type == "representative":
                 f.write(f"🎯 Nota: Búsqueda basada en el chunk más representativo de cada canción\n\n")
+            elif search_type == "full_songs":
+                f.write(f"🎼 Nota: Búsqueda basada en embeddings de canciones completas\n\n")
             
             f.write(f"🎵 ARCHIVOS MP3 EN LA PLAYLIST:\n")
             f.write("-" * 50 + "\n")
@@ -527,9 +549,7 @@ def create_playlist_info_file(playlist_folder, description, playlist_info, searc
         print(f"⚠️  Advertencia: No se pudo crear el archivo de información: {str(e)}")
 
 def create_m3u_playlist(playlist_folder, playlist_name, playlist_info):
-    """
-    Crea un archivo M3U para la playlist que puede ser usado por reproductores de música.
-    """
+    """Crea un archivo M3U para la playlist."""
     m3u_file_path = os.path.join(playlist_folder, f"{playlist_name}.m3u")
     
     try:
@@ -551,7 +571,7 @@ def print_final_summary(playlist_folder, copied_count, failed_count, description
                        original_sample_rate, playlist_info, search_type):
     """
     Imprime el resumen final de la playlist creada.
-    Actualizado para los 4 tipos de embedding.
+    ACTUALIZADO: Incluye los 5 tipos de embedding.
     """
     print(f"\n🎉 ¡Playlist creada exitosamente!")
     print(f"📁 Carpeta: {playlist_folder}")
@@ -561,7 +581,8 @@ def print_final_summary(playlist_folder, copied_count, failed_count, description
         "chunks": "Encontradas por chunks de 30s, guardadas como canciones completas",
         "songs": "Promedio simple de todos los chunks por canción",
         "weighted": "Promedio ponderado por energía de audio",
-        "representative": "Chunk más representativo de cada canción"
+        "representative": "Chunk más representativo de cada canción",
+        "full_songs": "Embeddings de canciones completas (sin chunks)"
     }
     
     print(f"🔍 Método: {type_descriptions.get(search_type, search_type)}")
@@ -589,7 +610,8 @@ def print_final_summary(playlist_folder, copied_count, failed_count, description
                 'chunk': f"[Completa - encontrada por chunk {song.get('chunk_index', 0) + 1}]",
                 'song_average': "[Promedio simple]",
                 'weighted_pooling': f"[Promedio ponderado - chunk energético: {song.get('chunk_index', 0)}]",
-                'representative_chunk': f"[Chunk representativo {song.get('chunk_index', 0)}]"
+                'representative_chunk': f"[Chunk representativo {song.get('chunk_index', 0)}]",
+                'full_song': "[Canción completa]"
             }
             
             type_label = type_labels.get(embedding_type, f"[{embedding_type}]")
@@ -598,7 +620,7 @@ def print_final_summary(playlist_folder, copied_count, failed_count, description
 if __name__ == "__main__":
     print("🎵 GENERADOR DE PLAYLIST BASADO EN TEXTO")
     print("=" * 50)
-    print("Describe tu playlist y elige el tipo de búsqueda musical")
+    print("• Chunks, Simple Avg, Weighted Avg, Representative, Full Songs")
     print()
     
     # Ir directo a crear playlist basada en texto
