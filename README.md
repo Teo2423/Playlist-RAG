@@ -1,6 +1,6 @@
-# RagMusical 🎵
+# Playlist RAG (README HECHO CON CLAUDE4-SONNET)
 
-Un sistema avanzado de recomendación musical basado en **Retrieval-Augmented Generation (RAG)** que utiliza embeddings de audio multimodales para crear playlists personalizadas a partir de descripciones en lenguaje natural.
+Un sistema de recomendación musical basado en **Retrieval-Augmented Generation (RAG)** que utiliza embeddings de audio multimodales para crear playlists personalizadas a partir de descripciones en lenguaje natural.
 
 ## 🎓 Contexto Académico
 
